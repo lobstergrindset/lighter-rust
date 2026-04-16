@@ -41,7 +41,7 @@ be the primary source of truth instead of long README snippets:
 - [`examples/skip_nonce_order.rs`](examples/skip_nonce_order.rs): sign a create
   order transaction with `SkipNonce = 1` without sending it
 - [`examples/README.md`](examples/README.md): example-specific setup notes and
-  required environment variables
+  required environment variables, including signer and nonce notes
 
 Run them with:
 
@@ -93,19 +93,6 @@ Reference ports used while building this crate:
 | --- | --- |
 | Go reference signer | [`lighter-go`](https://github.com/elliottech/lighter-go) |
 | Python reference SDK | [`lighter-python`](https://github.com/elliottech/lighter-python) |
-
-## Nonce and Auth Notes
-
-- Each API key has its own nonce stream.
-- `NonceManagerType::Api` is the simplest starting point.
-- `NonceManagerType::Optimistic` reduces latency when you manage order flow
-  heavily and want local nonce reservation.
-- Skipping nonces is optional and is done by setting `SkipNonce = 1` through
-  `L2TxAttributes`, for example with `L2TxAttributes::skip_nonce_enabled()`.
-- Skipping a nonce does not remove nonce ordering requirements. The next nonce
-  must still be greater than the previous nonce and less than `2^47 - 1`.
-- Auth tokens are bound to API keys and should be regenerated if the backing
-  key changes.
 
 ## Development
 

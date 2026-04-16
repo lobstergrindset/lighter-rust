@@ -29,3 +29,21 @@ export LIGHTER_API_PRIVATE_KEY=your-api-private-key
 
 `public_rest.rs` defaults to `testnet.zklighter.elliot.ai` if `LIGHTER_HOST` is
 not set.
+
+## Nonce Notes
+
+- Each API key has its own nonce stream.
+- `NonceManagerType::Api` is the simplest starting point for signer-backed
+  clients.
+- `NonceManagerType::Optimistic` is useful when you want lower-latency local
+  nonce reservation and are managing a heavier transaction flow.
+- `SkipNonce = 1` is optional and can be set through `L2TxAttributes`, for
+  example with `L2TxAttributes::skip_nonce_enabled()`.
+- Skipping nonces does not remove nonce ordering requirements. You still need
+  to provide an explicit nonce, and the next nonce must be greater than the
+  previous nonce and less than `2^47 - 1`.
+
+## Auth Notes
+
+- Auth tokens are bound to API keys and should be regenerated if the backing
+  key changes.
