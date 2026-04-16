@@ -1,11 +1,11 @@
 [package]
 name = "lighter-sdk"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Rust SDK for interacting with the Lighter exchange over REST, WebSocket, and signer-backed transaction flows."
 license = "Apache-2.0"
-repository = "https://github.com/elliottech/lighter-rust"
-homepage = "https://github.com/elliottech/lighter-rust"
+repository = "https://github.com/lobstergrindset/lighter-rust"
+homepage = "https://github.com/lobstergrindset/lighter-rust"
 documentation = "https://docs.rs/lighter-sdk"
 readme = "README.md"
 rust-version = "1.85"
@@ -17,6 +17,7 @@ include = [
     "tests/**/*",
     "CHANGELOG.md",
     "LICENSE",
+    "RELEASE.md",
     "README.md",
 ]
 

@@ -31,17 +31,20 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 ## Examples
 
-The public usage examples live in [`examples/`](examples) and are intended to
-be the primary source of truth:
+The public usage examples live in the
+[`examples/` directory](https://github.com/lobstergrindset/lighter-rust/tree/main/examples)
+and are intended to be the primary source of truth:
 
-- [`examples/public_rest.rs`](examples/public_rest.rs): fetch public exchange
-  stats over REST without signer setup
-- [`examples/quickstart.rs`](examples/quickstart.rs): initialize a
+- [`examples/public_rest.rs`](https://github.com/lobstergrindset/lighter-rust/blob/main/examples/public_rest.rs):
+  fetch public exchange stats over REST without signer setup
+- [`examples/quickstart.rs`](https://github.com/lobstergrindset/lighter-rust/blob/main/examples/quickstart.rs):
+  initialize a
   `SignerClient` from environment variables and validate the configured key
-- [`examples/skip_nonce_order.rs`](examples/skip_nonce_order.rs): sign a create
-  order transaction with `SkipNonce = 1` without sending it
-- [`examples/README.md`](examples/README.md): example-specific setup notes and
-  required environment variables, including signer and nonce notes
+- [`examples/skip_nonce_order.rs`](https://github.com/lobstergrindset/lighter-rust/blob/main/examples/skip_nonce_order.rs):
+  sign a create order transaction with `SkipNonce = 1` without sending it
+- [`examples/README.md`](https://github.com/lobstergrindset/lighter-rust/blob/main/examples/README.md):
+  example-specific setup notes and required environment variables, including
+  signer and nonce notes
 
 Run them with:
 
@@ -85,7 +88,8 @@ Supported library filenames:
 
 | `lighter-sdk` | Tested signer source | Notes |
 | --- | --- | --- |
-| `0.1.0` | [`lighter-go`](https://github.com/elliottech/lighter-go) | Shared library release/build source |
+| `0.1.1` | [`lighter-go`](https://github.com/elliottech/lighter-go) | Shared library release/build source |
+| `0.1.0` | [`lighter-go`](https://github.com/elliottech/lighter-go) | Initial standalone release |
 
 Reference ports used while building this crate:
 
@@ -107,6 +111,9 @@ cargo doc --no-deps
 ./scripts/check-package.sh
 cargo publish --dry-run
 ```
+
+For a manual publish checklist, see
+[`RELEASE.md`](https://github.com/lobstergrindset/lighter-rust/blob/main/RELEASE.md).
 
 There is also an ignored smoke test for validating an external signer:
 

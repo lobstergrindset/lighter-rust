@@ -7,6 +7,8 @@ and the project follows SemVer while it is in `0.x`.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-16
+
 ### Added
 
 - Compile-checked Rust examples under `examples/` for public REST access,
