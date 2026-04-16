@@ -1,0 +1,40 @@
+[package]
+name = "lighter-sdk"
+version = "0.1.0"
+edition = "2024"
+description = "Rust SDK for interacting with the Lighter exchange over REST, WebSocket, and signer-backed transaction flows."
+license = "Apache-2.0"
+repository = "https://github.com/elliottech/lighter-rust"
+homepage = "https://github.com/elliottech/lighter-rust"
+documentation = "https://docs.rs/lighter-sdk"
+readme = "README.md"
+rust-version = "1.85"
+keywords = ["lighter", "exchange", "trading", "crypto", "sdk"]
+categories = ["api-bindings", "asynchronous", "network-programming"]
+include = [
+    "src/**/*",
+    "examples/**/*",
+    "tests/**/*",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+]
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_repr = "0.1"
+thiserror = "2"
+libloading = "0.8"
+async-trait = "0.1"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util", "macros"] }
+
+[package.metadata.docs.rs]
+all-features = true
