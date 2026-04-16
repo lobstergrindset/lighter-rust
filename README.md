@@ -1,9 +1,12 @@
 # lighter-rust
 
-`lighter-rust` is the standalone home of the publishable `lighter-sdk` crate.
+`lighter-rust` is an independently maintained Rust client for the Lighter
+exchange. The Cargo package published from this repository is `lighter-sdk`.
 
-`lighter-sdk` is a Rust SDK for interacting with the Lighter exchange. It
-provides:
+This repository is open-source work done independently and is not affiliated
+with, maintained by, or endorsed by Lighter.
+
+`lighter-sdk` provides:
 
 - a signer-backed transaction client
 - REST API access
@@ -26,37 +29,35 @@ lighter-sdk = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
-## Quickstart
+## Examples
 
-```rust,no_run
-use std::collections::HashMap;
+The public usage examples live in [`examples/`](examples) and are intended to
+be the primary source of truth instead of long README snippets:
 
-use lighter_sdk::client::SignerClient;
-use lighter_sdk::config::Config;
-use lighter_sdk::nonce::NonceManagerType;
+- [`examples/public_rest.rs`](examples/public_rest.rs): fetch public exchange
+  stats over REST without signer setup
+- [`examples/quickstart.rs`](examples/quickstart.rs): initialize a
+  `SignerClient` from environment variables and validate the configured key
+- [`examples/skip_nonce_order.rs`](examples/skip_nonce_order.rs): sign a create
+  order transaction with `SkipNonce = 1` without sending it
+- [`examples/README.md`](examples/README.md): example-specific setup notes and
+  required environment variables
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new("testnet.lighter.xyz")
-        .with_signer_lib_path("/path/to/signer/or/directory");
+Run them with:
 
-    let mut api_private_keys = HashMap::new();
-    api_private_keys.insert(0u8, "your-private-key".to_string());
-
-    let client = SignerClient::new(
-        config,
-        0,
-        api_private_keys,
-        NonceManagerType::Api,
-    )
-    .await?;
-
-    client.check_client()?;
-    Ok(())
-}
+```bash
+cargo run --example public_rest
+cargo run --example quickstart
+cargo run --example skip_nonce_order
 ```
 
-A compile-checked example also lives at [`examples/quickstart.rs`](examples/quickstart.rs).
+The signer-backed examples expect:
+
+- `LIGHTER_HOST`
+- `LIGHTER_SIGNER_LIB_PATH`
+- `LIGHTER_ACCOUNT_INDEX`
+- `LIGHTER_API_KEY_INDEX`
+- `LIGHTER_API_PRIVATE_KEY`
 
 ## Signer Installation
 
@@ -99,17 +100,22 @@ Reference ports used while building this crate:
 - `NonceManagerType::Api` is the simplest starting point.
 - `NonceManagerType::Optimistic` reduces latency when you manage order flow
   heavily and want local nonce reservation.
+- Skipping nonces is optional and is done by setting `SkipNonce = 1` through
+  `L2TxAttributes`, for example with `L2TxAttributes::skip_nonce_enabled()`.
+- Skipping a nonce does not remove nonce ordering requirements. The next nonce
+  must still be greater than the previous nonce and less than `2^47 - 1`.
 - Auth tokens are bound to API keys and should be regenerated if the backing
   key changes.
 
 ## Development
 
-Release validation is intentionally manual for the first public releases:
+Local validation:
 
 ```bash
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
+cargo test --examples
 cargo doc --no-deps
 ./scripts/check-package.sh
 cargo publish --dry-run
@@ -119,7 +125,7 @@ There is also an ignored smoke test for validating an external signer:
 
 ```bash
 LIGHTER_SIGNER_LIB_PATH=/path/to/signer \
-LIGHTER_SDK_SMOKE_HOST=testnet.lighter.xyz \
+LIGHTER_SDK_SMOKE_HOST=your-lighter-host \
 LIGHTER_SDK_SMOKE_PRIVATE_KEY=... \
 LIGHTER_SDK_SMOKE_API_KEY_INDEX=0 \
 LIGHTER_SDK_SMOKE_ACCOUNT_INDEX=0 \

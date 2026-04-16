@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use lighter_sdk::client::SignerClient;
 use lighter_sdk::config::Config;
 use lighter_sdk::nonce::NonceManagerType;
+use lighter_sdk::types::transact_opts::L2TxAttributes;
 
 fn required_env(name: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| panic!("missing env var `{name}`"))
@@ -28,7 +29,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         NonceManagerType::Api,
     )
     .await?;
-    client.check_client()?;
-    println!("Signer client is ready for account {account_index}.");
+
+    let signed = client.sign_create_order_with_attributes(
+        0,
+        123,
+        1_000,
+        400_000,
+        false,
+        0,
+        1,
+        false,
+        0,
+        -1,
+        L2TxAttributes::skip_nonce_enabled(),
+        api_key_index,
+        2_222,
+    )?;
+
+    println!("{}", signed.tx_info);
     Ok(())
 }
