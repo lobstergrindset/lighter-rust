@@ -32,7 +32,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ## Examples
 
 The public usage examples live in [`examples/`](examples) and are intended to
-be the primary source of truth instead of long README snippets:
+be the primary source of truth:
 
 - [`examples/public_rest.rs`](examples/public_rest.rs): fetch public exchange
   stats over REST without signer setup
