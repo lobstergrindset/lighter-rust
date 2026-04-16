@@ -20,6 +20,8 @@ and the project follows SemVer while it is in `0.x`.
   keeping the primary examples inline, and now describes the project as an
   independent open-source crate rather than a publishing-oriented workspace.
 - Nonce validation now rejects values greater than or equal to `2^47 - 1`.
+- REST responses with HTTP `405` or `429` are now both classified as rate
+  limiting in the Rust SDK.
 
 ## [0.1.0] - 2026-04-16
 

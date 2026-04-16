@@ -4,6 +4,9 @@ use tracing::trace;
 use crate::config::Config;
 use crate::error::{Result, SdkError};
 
+const HTTP_STATUS_METHOD_NOT_ALLOWED: u16 = 405;
+const HTTP_STATUS_TOO_MANY_REQUESTS: u16 = 429;
+
 pub struct LighterRestClient {
     client: Client,
     base_url: String,
@@ -130,6 +133,7 @@ impl LighterRestClient {
     async fn handle_response<T: serde::de::DeserializeOwned>(resp: reqwest::Response) -> Result<T> {
         let status = resp.status();
         if !status.is_success() {
+            let status_code = status.as_u16() as i64;
             let body = resp.text().await.unwrap_or_default();
             // Try to parse as API error envelope
             if let Ok(err) = serde_json::from_str::<serde_json::Value>(&body)
@@ -138,18 +142,50 @@ impl LighterRestClient {
                     err.get("message").and_then(|m| m.as_str()),
                 )
             {
+                if is_rate_limited_status(status.as_u16()) {
+                    return Err(SdkError::RateLimited {
+                        code: status_code,
+                        message: message.to_string(),
+                    });
+                }
                 return Err(SdkError::Api {
                     code,
                     message: message.to_string(),
                 });
             }
+            if is_rate_limited_status(status.as_u16()) {
+                return Err(SdkError::RateLimited {
+                    code: status_code,
+                    message: body,
+                });
+            }
             return Err(SdkError::Api {
-                code: status.as_u16() as i64,
+                code: status_code,
                 message: body,
             });
         }
         let body = resp.text().await?;
         trace!(raw_body = %body, "REST response");
         serde_json::from_str(&body).map_err(Into::into)
+    }
+}
+
+fn is_rate_limited_status(status_code: u16) -> bool {
+    matches!(
+        status_code,
+        HTTP_STATUS_METHOD_NOT_ALLOWED | HTTP_STATUS_TOO_MANY_REQUESTS
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_rate_limited_status;
+
+    #[test]
+    fn recognizes_supported_rate_limit_status_codes() {
+        assert!(is_rate_limited_status(405));
+        assert!(is_rate_limited_status(429));
+        assert!(!is_rate_limited_status(400));
+        assert!(!is_rate_limited_status(500));
     }
 }

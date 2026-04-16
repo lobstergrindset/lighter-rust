@@ -161,6 +161,8 @@ pub enum SdkError {
     Http(#[from] reqwest::Error),
     #[error("API error (code {code}): {message}")]
     Api { code: i64, message: String },
+    #[error("Rate limited (HTTP {code}): {message}")]
+    RateLimited { code: i64, message: String },
 
     // === WebSocket errors ===
     #[error("WebSocket error: {0}")]
@@ -188,3 +190,48 @@ impl From<tokio_tungstenite::tungstenite::Error> for SdkError {
 }
 
 pub type Result<T> = std::result::Result<T, SdkError>;
+
+impl SdkError {
+    pub fn is_rate_limited(&self) -> bool {
+        match self {
+            Self::RateLimited { .. } => true,
+            Self::Api { code, .. } => matches!(*code, 405 | 429),
+            _ => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SdkError;
+
+    #[test]
+    fn classifies_new_rate_limited_variant() {
+        let err = SdkError::RateLimited {
+            code: 405,
+            message: "cooldown".to_string(),
+        };
+
+        assert!(err.is_rate_limited());
+    }
+
+    #[test]
+    fn classifies_legacy_api_status_codes_for_rate_limits() {
+        let too_many = SdkError::Api {
+            code: 429,
+            message: "too many requests".to_string(),
+        };
+        let method_not_allowed = SdkError::Api {
+            code: 405,
+            message: "method not allowed".to_string(),
+        };
+        let other = SdkError::Api {
+            code: 500,
+            message: "server error".to_string(),
+        };
+
+        assert!(too_many.is_rate_limited());
+        assert!(method_not_allowed.is_rate_limited());
+        assert!(!other.is_rate_limited());
+    }
+}
