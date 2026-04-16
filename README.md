@@ -29,6 +29,53 @@ lighter-sdk = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
+## Feature status vs `lighter-python`
+
+`lighter-python` is the official, OpenAPI-generated SDK. This crate is a
+hand-written port; coverage is partial. Summary of the gap as of
+`lighter-sdk` `0.1.1`, compared against
+[`lighter-python@c27a2cc`](https://github.com/elliottech/lighter-python/commit/c27a2cc6aef47b35cedafddc3db2cfb455708fa7)
+(2026-04-15):
+
+**REST** — ~26 of the ~56 OpenAPI paths are wired up (~46%). Present:
+account, order, candlestick, funding, announcement, info, transaction
+(`sendTx`/`sendTxBatch`/`nextNonce`/`tx`), bridge history
+(deposit/withdraw/transfer). Not yet ported: Bridges (non-history),
+Pushnotif, Notification, Referral, Faucet, Export, Leases, Liquidations,
+ExchangeMetrics, ExecuteStats, PublicPoolsMetadata, SystemConfig,
+TransferFeeInfo, WithdrawalDelay, L1Metadata, API tokens (create/revoke),
+`txFromL1TxHash`.
+
+**Signed transactions** — covered: CreateOrder, CreateGroupedOrders,
+CancelOrder, CancelAllOrders, ModifyOrder, Withdraw, CreateSubAccount,
+Transfer (same-master), CreatePublicPool, UpdatePublicPool,
+Mint/BurnShares, UpdateLeverage, UpdateMargin, CreateAuthToken. Missing:
+`ApproveIntegrator` (both variants), `StakeAssets`, `UnstakeAssets`,
+`GenerateAPIKey` keygen helper. **No L1 (EIP-191) signing yet**, so
+`ChangePubKey`, cross-master `Transfer`, and cross-master
+`ApproveIntegrator` cannot be completed end-to-end from Rust. The Python
+SDK uses `eth_account` to sign `messageToSign` and attach `L1Sig`.
+
+**Convenience order helpers** (Python only): `create_market_order` and
+its slippage/quote-amount variants, `create_tp_order`, `create_sl_order`
+(+ `_limit` variants), `get_best_price`, `get_potential_execution_price`.
+
+**WebSocket** — richer here than in Python. Python streams
+`order_book/{id}` and `account_all/{id}`; this crate adds `ticker`,
+`market_stats` (+ `all`), `account_all_positions`, `account_all_assets`,
+`account_spot_avg_entry_prices`, `account_all_trades`, `account_orders`,
+`account_all_orders`, and `user_stats` with typed handlers and
+auth-token support.
+
+**Rust-only extras:** structured `SdkError` enum with `is_rate_limited()`
+classifier; batch sign/send flow (`reserve_nonces`,
+`sign_and_send_batch`, `send_signed_batch`, `acknowledge_batch_failure`,
+`hard_refresh_nonce`); `L2TxAttributes` builder with `.validate()`;
+constants enforcing Go-side txtypes bounds; config builder with layered
+signer-lib lookup; `rustls-tls` (no OpenSSL); `tracing` integration.
+
+PRs to close any of the above gaps are welcome.
+
 ## Examples
 
 The public usage examples live in the
