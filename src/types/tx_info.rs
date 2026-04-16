@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::order_info::OrderInfo;
+use super::transact_opts::L2TxAttributes;
 
 pub trait TxInfo {
     fn tx_type(&self) -> u8;
@@ -24,6 +25,12 @@ pub struct L2ChangePubKeyTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -40,6 +47,12 @@ pub struct L2CreateSubAccountTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -58,6 +71,12 @@ pub struct L2CreateOrderTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -78,6 +97,12 @@ pub struct L2CreateGroupedOrdersTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -98,6 +123,12 @@ pub struct L2CancelOrderTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -124,6 +155,12 @@ pub struct L2ModifyOrderTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -144,6 +181,12 @@ pub struct L2CancelAllOrdersTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -176,6 +219,12 @@ pub struct L2TransferTxInfo {
     pub sig: Vec<u8>,
     #[serde(rename = "L1Sig", default, skip_serializing_if = "String::is_empty")]
     pub l1_sig: String,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -198,6 +247,12 @@ pub struct L2WithdrawTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -220,6 +275,12 @@ pub struct L2CreatePublicPoolTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -244,6 +305,12 @@ pub struct L2UpdatePublicPoolTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -264,6 +331,12 @@ pub struct L2MintSharesTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -284,6 +357,12 @@ pub struct L2BurnSharesTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -306,6 +385,12 @@ pub struct L2UpdateLeverageTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }
@@ -328,6 +413,12 @@ pub struct L2UpdateMarginTxInfo {
     pub nonce: i64,
     #[serde(rename = "Sig")]
     pub sig: Vec<u8>,
+    #[serde(
+        rename = "L2TxAttributes",
+        default,
+        skip_serializing_if = "L2TxAttributes::is_empty"
+    )]
+    pub l2_tx_attributes: L2TxAttributes,
     #[serde(skip)]
     pub signed_hash: String,
 }

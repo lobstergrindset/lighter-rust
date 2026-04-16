@@ -17,6 +17,7 @@ use crate::nonce::api::ApiNonceManager;
 use crate::nonce::manager::NonceManager;
 use crate::nonce::optimistic::OptimisticNonceManager;
 use crate::rest::client::LighterRestClient;
+use crate::types::transact_opts::L2TxAttributes;
 
 const CODE_OK: i64 = 200;
 const CODE_INVALID_NONCE: i64 = 21104;
@@ -180,9 +181,43 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.create_order_with_attributes(
+            market_index,
+            client_order_index,
+            base_amount,
+            price,
+            is_ask,
+            order_type,
+            time_in_force,
+            reduce_only,
+            trigger_price,
+            order_expiry,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn create_order_with_attributes(
+        &self,
+        market_index: i32,
+        client_order_index: i64,
+        base_amount: i64,
+        price: i32,
+        is_ask: bool,
+        order_type: i32,
+        time_in_force: i32,
+        reduce_only: bool,
+        trigger_price: i32,
+        order_expiry: i64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let manages_nonce = api_key_index.is_none() || nonce.is_none();
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = match signer::sign_create_order(
+        let signed = match signer::sign_create_order_with_attributes(
             market_index,
             client_order_index,
             base_amount,
@@ -196,6 +231,7 @@ impl SignerClient {
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         ) {
             Ok(signed) => signed,
             Err(err) => {
@@ -218,13 +254,32 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.create_grouped_orders_with_attributes(
+            grouping_type,
+            orders,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn create_grouped_orders_with_attributes(
+        &self,
+        grouping_type: u8,
+        orders: &[FfiCreateOrderTxReq],
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_create_grouped_orders(
+        let signed = signer::sign_create_grouped_orders_with_attributes(
             grouping_type,
             orders,
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -238,13 +293,32 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.cancel_order_with_attributes(
+            market_index,
+            order_index,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn cancel_order_with_attributes(
+        &self,
+        market_index: i32,
+        order_index: i64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_cancel_order(
+        let signed = signer::sign_cancel_order_with_attributes(
             market_index,
             order_index,
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -261,8 +335,32 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.modify_order_with_attributes(
+            market_index,
+            order_index,
+            base_amount,
+            price,
+            trigger_price,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn modify_order_with_attributes(
+        &self,
+        market_index: i32,
+        order_index: i64,
+        base_amount: i64,
+        price: i64,
+        trigger_price: i64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_modify_order(
+        let signed = signer::sign_modify_order_with_attributes(
             market_index,
             order_index,
             base_amount,
@@ -271,6 +369,7 @@ impl SignerClient {
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -284,13 +383,32 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.cancel_all_orders_with_attributes(
+            time_in_force,
+            timestamp_ms,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn cancel_all_orders_with_attributes(
+        &self,
+        time_in_force: i32,
+        timestamp_ms: i64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_cancel_all_orders(
+        let signed = signer::sign_cancel_all_orders_with_attributes(
             time_in_force,
             timestamp_ms,
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -305,14 +423,35 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.withdraw_with_attributes(
+            asset_index,
+            route_type,
+            amount,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn withdraw_with_attributes(
+        &self,
+        asset_index: i32,
+        route_type: i32,
+        amount: u64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_withdraw(
+        let signed = signer::sign_withdraw_with_attributes(
             asset_index,
             route_type,
             amount,
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -331,8 +470,36 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.transfer_with_attributes(
+            to_account_index,
+            asset_index,
+            from_route_type,
+            to_route_type,
+            amount,
+            usdc_fee,
+            memo,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn transfer_with_attributes(
+        &self,
+        to_account_index: i64,
+        asset_index: i16,
+        from_route_type: u8,
+        to_route_type: u8,
+        amount: i64,
+        usdc_fee: i64,
+        memo: &str,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_transfer(
+        let signed = signer::sign_transfer_with_attributes(
             to_account_index,
             asset_index,
             from_route_type,
@@ -343,6 +510,7 @@ impl SignerClient {
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -355,8 +523,30 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.change_pub_key_with_attributes(
+            new_pub_key,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn change_pub_key_with_attributes(
+        &self,
+        new_pub_key: &str,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_change_pub_key(new_pub_key, n, key as i32, self.account_index)?;
+        let signed = signer::sign_change_pub_key_with_attributes(
+            new_pub_key,
+            n,
+            key as i32,
+            self.account_index,
+            &tx_attributes,
+        )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
         Ok((signed, result?))
@@ -367,8 +557,23 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.create_sub_account_with_attributes(L2TxAttributes::default(), api_key_index, nonce)
+            .await
+    }
+
+    pub async fn create_sub_account_with_attributes(
+        &self,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_create_sub_account(n, key as i32, self.account_index)?;
+        let signed = signer::sign_create_sub_account_with_attributes(
+            n,
+            key as i32,
+            self.account_index,
+            &tx_attributes,
+        )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
         Ok((signed, result?))
@@ -382,14 +587,35 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.create_public_pool_with_attributes(
+            operator_fee,
+            initial_total_shares,
+            min_operator_share_rate,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn create_public_pool_with_attributes(
+        &self,
+        operator_fee: i64,
+        initial_total_shares: i32,
+        min_operator_share_rate: i64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_create_public_pool(
+        let signed = signer::sign_create_public_pool_with_attributes(
             operator_fee,
             initial_total_shares,
             min_operator_share_rate,
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -405,8 +631,30 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.update_public_pool_with_attributes(
+            public_pool_index,
+            status,
+            operator_fee,
+            min_operator_share_rate,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn update_public_pool_with_attributes(
+        &self,
+        public_pool_index: i64,
+        status: i32,
+        operator_fee: i64,
+        min_operator_share_rate: i32,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_update_public_pool(
+        let signed = signer::sign_update_public_pool_with_attributes(
             public_pool_index,
             status,
             operator_fee,
@@ -414,6 +662,7 @@ impl SignerClient {
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -427,13 +676,32 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.mint_shares_with_attributes(
+            public_pool_index,
+            share_amount,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn mint_shares_with_attributes(
+        &self,
+        public_pool_index: i64,
+        share_amount: i64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_mint_shares(
+        let signed = signer::sign_mint_shares_with_attributes(
             public_pool_index,
             share_amount,
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -447,13 +715,32 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.burn_shares_with_attributes(
+            public_pool_index,
+            share_amount,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn burn_shares_with_attributes(
+        &self,
+        public_pool_index: i64,
+        share_amount: i64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_burn_shares(
+        let signed = signer::sign_burn_shares_with_attributes(
             public_pool_index,
             share_amount,
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -468,14 +755,35 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.update_leverage_with_attributes(
+            market_index,
+            initial_margin_fraction,
+            margin_mode,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn update_leverage_with_attributes(
+        &self,
+        market_index: i32,
+        initial_margin_fraction: i32,
+        margin_mode: i32,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_update_leverage(
+        let signed = signer::sign_update_leverage_with_attributes(
             market_index,
             initial_margin_fraction,
             margin_mode,
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -490,14 +798,35 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
+        self.update_margin_with_attributes(
+            market_index,
+            usdc_amount,
+            direction,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+        .await
+    }
+
+    pub async fn update_margin_with_attributes(
+        &self,
+        market_index: i32,
+        usdc_amount: i64,
+        direction: i32,
+        tx_attributes: L2TxAttributes,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
         let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = signer::sign_update_margin(
+        let signed = signer::sign_update_margin_with_attributes(
             market_index,
             usdc_amount,
             direction,
             n,
             key as i32,
             self.account_index,
+            &tx_attributes,
         )?;
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
         self.handle_tx_result(&result, key).await;
@@ -573,7 +902,40 @@ impl SignerClient {
         api_key_index: u8,
         nonce: i64,
     ) -> Result<signer::SignedTx> {
-        signer::sign_create_order(
+        self.sign_create_order_with_attributes(
+            market_index,
+            client_order_index,
+            base_amount,
+            price,
+            is_ask,
+            order_type,
+            time_in_force,
+            reduce_only,
+            trigger_price,
+            order_expiry,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+    }
+
+    pub fn sign_create_order_with_attributes(
+        &self,
+        market_index: i32,
+        client_order_index: i64,
+        base_amount: i64,
+        price: i32,
+        is_ask: bool,
+        order_type: i32,
+        time_in_force: i32,
+        reduce_only: bool,
+        trigger_price: i32,
+        order_expiry: i64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: u8,
+        nonce: i64,
+    ) -> Result<signer::SignedTx> {
+        signer::sign_create_order_with_attributes(
             market_index,
             client_order_index,
             base_amount,
@@ -587,6 +949,7 @@ impl SignerClient {
             nonce,
             api_key_index as i32,
             self.account_index,
+            &tx_attributes,
         )
     }
 
@@ -599,12 +962,30 @@ impl SignerClient {
         api_key_index: u8,
         nonce: i64,
     ) -> Result<signer::SignedTx> {
-        signer::sign_cancel_order(
+        self.sign_cancel_order_with_attributes(
+            market_index,
+            order_index,
+            L2TxAttributes::default(),
+            api_key_index,
+            nonce,
+        )
+    }
+
+    pub fn sign_cancel_order_with_attributes(
+        &self,
+        market_index: i32,
+        order_index: i64,
+        tx_attributes: L2TxAttributes,
+        api_key_index: u8,
+        nonce: i64,
+    ) -> Result<signer::SignedTx> {
+        signer::sign_cancel_order_with_attributes(
             market_index,
             order_index,
             nonce,
             api_key_index as i32,
             self.account_index,
+            &tx_attributes,
         )
     }
 

@@ -23,6 +23,9 @@ fn validate_nonce(nonce: i64) -> Result<()> {
     if nonce < MIN_NONCE {
         return Err(SdkError::NonceTooLow);
     }
+    if nonce >= MAX_NONCE_EXCLUSIVE {
+        return Err(SdkError::NonceTooHigh);
+    }
     Ok(())
 }
 
@@ -55,6 +58,7 @@ impl TxInfo for L2ChangePubKeyTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
         validate_nonce(self.nonce)?;
@@ -74,6 +78,7 @@ impl TxInfo for L2CreateSubAccountTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         if self.account_index < MIN_ACCOUNT_INDEX {
             return Err(SdkError::AccountIndexTooLow);
         }
@@ -95,6 +100,7 @@ impl TxInfo for L2CreateOrderTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
 
@@ -244,6 +250,7 @@ impl TxInfo for L2CreateGroupedOrdersTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
 
@@ -467,6 +474,7 @@ impl TxInfo for L2CancelOrderTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
         validate_market_index(self.market_index)?;
@@ -492,6 +500,7 @@ impl TxInfo for L2ModifyOrderTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
         validate_market_index(self.market_index)?;
@@ -534,6 +543,7 @@ impl TxInfo for L2CancelAllOrdersTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
 
         if self.api_key_index > MAX_API_KEY_INDEX && self.api_key_index != NIL_API_KEY_INDEX {
@@ -574,6 +584,7 @@ impl TxInfo for L2TransferTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         if self.from_account_index < MIN_ACCOUNT_INDEX + 1 {
             return Err(SdkError::FromAccountIndexTooLow);
         }
@@ -635,6 +646,7 @@ impl TxInfo for L2WithdrawTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         if self.from_account_index < MIN_ACCOUNT_INDEX {
             return Err(SdkError::FromAccountIndexTooLow);
         }
@@ -675,6 +687,7 @@ impl TxInfo for L2CreatePublicPoolTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         if self.account_index < MIN_ACCOUNT_INDEX {
             return Err(SdkError::AccountIndexTooLow);
         }
@@ -711,6 +724,7 @@ impl TxInfo for L2UpdatePublicPoolTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
 
@@ -745,6 +759,7 @@ impl TxInfo for L2MintSharesTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
 
@@ -776,6 +791,7 @@ impl TxInfo for L2BurnSharesTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
 
@@ -807,6 +823,7 @@ impl TxInfo for L2UpdateLeverageTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
 
@@ -843,6 +860,7 @@ impl TxInfo for L2UpdateMarginTxInfo {
         &self.signed_hash
     }
     fn validate(&self) -> Result<()> {
+        self.l2_tx_attributes.validate()?;
         validate_account_index(self.account_index)?;
         validate_api_key_index(self.api_key_index)?;
 
@@ -868,5 +886,37 @@ impl TxInfo for L2UpdateMarginTxInfo {
         validate_nonce(self.nonce)?;
         validate_expired_at(self.expired_at)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::transact_opts::L2TxAttributes;
+
+    fn valid_create_sub_account_tx(nonce: i64) -> L2CreateSubAccountTxInfo {
+        L2CreateSubAccountTxInfo {
+            account_index: 1,
+            api_key_index: 0,
+            expired_at: 1,
+            nonce,
+            sig: vec![],
+            l2_tx_attributes: L2TxAttributes::default(),
+            signed_hash: String::new(),
+        }
+    }
+
+    #[test]
+    fn accepts_nonce_below_exclusive_upper_bound() {
+        let tx = valid_create_sub_account_tx(MAX_NONCE_EXCLUSIVE - 1);
+
+        assert!(tx.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_nonce_at_exclusive_upper_bound() {
+        let tx = valid_create_sub_account_tx(MAX_NONCE_EXCLUSIVE);
+
+        assert!(matches!(tx.validate(), Err(SdkError::NonceTooHigh)));
     }
 }

@@ -17,6 +17,8 @@ pub enum SdkError {
     AccountIndexTooHigh,
     #[error("AccountNonce should not be less than {MIN_NONCE}")]
     NonceTooLow,
+    #[error("AccountNonce should be less than {MAX_NONCE_EXCLUSIVE}")]
+    NonceTooHigh,
     #[error("CancelAllTimeInForce is invalid")]
     InvalidCancelAllTimeInForce,
     #[error("ReduceOnly is invalid")]
@@ -133,6 +135,16 @@ pub enum SdkError {
     CancelModeInvalid,
     #[error("Margin movement direction is not valid")]
     InvalidUpdateMarginDirection,
+    #[error("Nonce skip attribute is invalid")]
+    NonceSkipAttributeInvalid,
+    #[error("IntegratorAccountIndex is in invalid range")]
+    IntegratorAccountIndexInvalidRange,
+    #[error("Integrator fees are in invalid range")]
+    IntegratorFeeInvalidRange,
+    #[error(
+        "IntegratorAccountIndex should be non-zero when integrator taker fee or maker fee is non-zero"
+    )]
+    IntegratorAccountIndexRequiredForNonZeroFees,
 
     // === FFI errors ===
     #[error("FFI error: {0}")]

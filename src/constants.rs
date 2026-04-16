@@ -120,6 +120,7 @@ pub const MAX_POOL_SHARES_TO_MINT_OR_BURN: i64 = (1 << 60) - 1;
 
 // Nonce bounds
 pub const MIN_NONCE: i64 = 0;
+pub const MAX_NONCE_EXCLUSIVE: i64 = (1 << 47) - 1;
 
 // Order nonce bounds
 pub const MIN_ORDER_NONCE: i64 = 0;
