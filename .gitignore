@@ -1,3 +1,4 @@
 /target
+/signers
 .DS_Store
 Cargo.lock
