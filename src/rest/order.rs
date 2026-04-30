@@ -2,6 +2,9 @@ use crate::error::Result;
 use crate::models::order::*;
 use crate::models::order_book::*;
 use crate::rest::client::LighterRestClient;
+use tracing::info;
+
+const DEFAULT_ACCOUNT_INACTIVE_ORDERS_LIMIT: &str = "100";
 
 impl LighterRestClient {
     pub async fn get_order_books(&self) -> Result<OrderBooks> {
@@ -39,6 +42,11 @@ impl LighterRestClient {
     ) -> Result<Orders> {
         let account_index = account_index.to_string();
         let market_id = market_id.to_string();
+        info!(
+            account_index = account_index.as_str(),
+            market_id = market_id.as_str(),
+            "fetching lighter account active orders"
+        );
         self.get_with_auth(
             "/api/v1/accountActiveOrders",
             &[
@@ -62,10 +70,18 @@ impl LighterRestClient {
         let mut query: Vec<(&str, &str)> = vec![
             ("account_index", account_index.as_str()),
             ("market_id", market_id.as_str()),
+            ("limit", DEFAULT_ACCOUNT_INACTIVE_ORDERS_LIMIT),
         ];
         if let Some(c) = cursor {
             query.push(("cursor", c));
         }
+        info!(
+            account_index = account_index.as_str(),
+            market_id = market_id.as_str(),
+            limit = DEFAULT_ACCOUNT_INACTIVE_ORDERS_LIMIT,
+            cursor = cursor.unwrap_or(""),
+            "fetching lighter account inactive orders"
+        );
         self.get_with_auth("/api/v1/accountInactiveOrders", &query, auth)
             .await
     }

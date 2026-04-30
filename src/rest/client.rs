@@ -1,5 +1,5 @@
-use reqwest::Client;
-use tracing::trace;
+use reqwest::{Client, multipart};
+use tracing::{trace, warn};
 
 use crate::config::Config;
 use crate::error::{Result, SdkError};
@@ -99,6 +99,24 @@ impl LighterRestClient {
         Self::handle_response(resp).await
     }
 
+    pub async fn post_multipart<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &str,
+        form: &[(&str, &str)],
+    ) -> Result<T> {
+        let url = format!("{}{}", self.base_url, path);
+        let mut multipart_form = multipart::Form::new();
+        for (key, value) in form {
+            multipart_form = multipart_form.text((*key).to_string(), (*value).to_string());
+        }
+        let mut req = self.client.post(&url).multipart(multipart_form);
+        if let Some(ref token) = self.auth_token {
+            req = req.header("Authorization", format!("Bearer {}", token));
+        }
+        let resp = req.send().await?;
+        Self::handle_response(resp).await
+    }
+
     pub async fn post_form_with_auth<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
@@ -135,6 +153,11 @@ impl LighterRestClient {
         if !status.is_success() {
             let status_code = status.as_u16() as i64;
             let body = resp.text().await.unwrap_or_default();
+            warn!(
+                http_status = status_code,
+                response_body = %body,
+                "REST error response"
+            );
             // Try to parse as API error envelope
             if let Ok(err) = serde_json::from_str::<serde_json::Value>(&body)
                 && let (Some(code), Some(message)) = (

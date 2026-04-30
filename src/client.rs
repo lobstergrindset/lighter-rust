@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::config::Config;
 use crate::error::{Result, SdkError};
@@ -242,7 +242,46 @@ impl SignerClient {
                 return Err(err);
             }
         };
+        info!(
+            account_index = self.account_index,
+            api_key_index = key,
+            nonce = n,
+            market_index,
+            client_order_index,
+            base_amount,
+            price,
+            is_ask,
+            order_type,
+            time_in_force,
+            reduce_only,
+            trigger_price,
+            order_expiry,
+            tx_type = signed.tx_type,
+            tx_info_len = signed.tx_info.len(),
+            "signed lighter create order"
+        );
         let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
+        if let Err(error) = &result {
+            warn!(
+                account_index = self.account_index,
+                api_key_index = key,
+                nonce = n,
+                market_index,
+                client_order_index,
+                base_amount,
+                price,
+                is_ask,
+                order_type,
+                time_in_force,
+                reduce_only,
+                trigger_price,
+                order_expiry,
+                tx_type = signed.tx_type,
+                tx_info_len = signed.tx_info.len(),
+                %error,
+                "lighter create order send failed"
+            );
+        }
         self.handle_tx_result(&result, key).await;
         Ok((signed, result?))
     }
