@@ -21,9 +21,14 @@ impl LighterRestClient {
         account_index: i64,
         auth: &str,
         cursor: Option<&str>,
+        limit: i64,
     ) -> Result<PositionFundings> {
         let account_index = account_index.to_string();
-        let mut query: Vec<(&str, &str)> = vec![("account_index", account_index.as_str())];
+        let limit = limit.to_string();
+        let mut query: Vec<(&str, &str)> = vec![
+            ("account_index", account_index.as_str()),
+            ("limit", limit.as_str()),
+        ];
         if let Some(cursor) = cursor {
             query.push(("cursor", cursor));
         }
