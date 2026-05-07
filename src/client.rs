@@ -1,12 +1,16 @@
 #![allow(clippy::too_many_arguments)]
 
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::sync::Arc;
 
+use k256::ecdsa::SigningKey;
+use sha3::{Digest, Keccak256};
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
 use crate::config::Config;
+use crate::constants::{ASSET_ROUTE_TYPE_PERPS, USDC_ASSET_INDEX};
 use crate::error::{Result, SdkError};
 use crate::ffi::load_signer;
 use crate::ffi::signer;
@@ -538,6 +542,87 @@ impl SignerClient {
         Ok((signed, result?))
     }
 
+    pub async fn sign_transfer_with_l1_signature(
+        &self,
+        eth_private_key: &str,
+        to_account_index: i64,
+        asset_index: i16,
+        from_route_type: u8,
+        to_route_type: u8,
+        amount: i64,
+        usdc_fee: i64,
+        memo: &str,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<signer::SignedTx> {
+        let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
+        let signed = signer::sign_transfer_with_attributes(
+            to_account_index,
+            asset_index,
+            from_route_type,
+            to_route_type,
+            amount,
+            usdc_fee,
+            memo,
+            n,
+            key as i32,
+            self.account_index,
+            &L2TxAttributes::default(),
+        );
+        let signed = match signed {
+            Ok(signed) => signed,
+            Err(err) => {
+                let nm = self.nonce_manager.lock().await;
+                nm.acknowledge_failure(key).await;
+                return Err(err);
+            }
+        };
+        add_l1_signature_to_signed_tx(signed, eth_private_key)
+    }
+
+    pub async fn fast_withdraw_usdc(
+        &self,
+        eth_private_key: &str,
+        to_account_index: i64,
+        to_address: &str,
+        amount: i64,
+        usdc_fee: i64,
+        auth: &str,
+        api_key_index: Option<u8>,
+        nonce: Option<i64>,
+    ) -> Result<(signer::SignedTx, RespSendTx)> {
+        let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
+        let memo = fast_withdraw_memo_for_address(to_address)?;
+        let signed = signer::sign_transfer_with_attributes(
+            to_account_index,
+            USDC_ASSET_INDEX as i16,
+            ASSET_ROUTE_TYPE_PERPS,
+            ASSET_ROUTE_TYPE_PERPS,
+            amount,
+            usdc_fee,
+            &memo,
+            n,
+            key as i32,
+            self.account_index,
+            &L2TxAttributes::default(),
+        );
+        let signed = match signed {
+            Ok(signed) => signed,
+            Err(err) => {
+                let nm = self.nonce_manager.lock().await;
+                nm.acknowledge_failure(key).await;
+                return Err(err);
+            }
+        };
+        let signed = add_l1_signature_to_signed_tx(signed, eth_private_key)?;
+        let result = self
+            .rest
+            .fast_withdraw(&signed.tx_info, to_address, auth)
+            .await;
+        self.handle_tx_result(&result, key).await;
+        Ok((signed, result?))
+    }
+
     pub async fn change_pub_key(
         &self,
         new_pub_key: &str,
@@ -1041,4 +1126,73 @@ impl SignerClient {
 
         result
     }
+}
+
+pub fn fast_withdraw_memo_for_address(to_address: &str) -> Result<String> {
+    let address = parse_eth_address(to_address)?;
+    let mut memo = [0_u8; 32];
+    memo[..20].copy_from_slice(&address);
+
+    let mut encoded = String::with_capacity(64);
+    for byte in memo {
+        write!(&mut encoded, "{byte:02x}")
+            .map_err(|error| SdkError::Other(format!("failed to encode memo: {error}")))?;
+    }
+    Ok(encoded)
+}
+
+fn add_l1_signature_to_signed_tx(
+    mut signed: signer::SignedTx,
+    eth_private_key: &str,
+) -> Result<signer::SignedTx> {
+    let message = signed
+        .message_to_sign
+        .as_deref()
+        .ok_or_else(|| SdkError::Other("signed transfer is missing message_to_sign".to_string()))?;
+    let signature = sign_eth_personal_message(eth_private_key, message.as_bytes())?;
+    let mut tx_info = serde_json::from_str::<serde_json::Value>(&signed.tx_info)?;
+    let object = tx_info.as_object_mut().ok_or_else(|| {
+        SdkError::Other("signed transfer tx_info is not a JSON object".to_string())
+    })?;
+    object.insert("L1Sig".to_string(), signature.into());
+    signed.tx_info = serde_json::to_string(&tx_info)?;
+    Ok(signed)
+}
+
+fn parse_eth_address(value: &str) -> Result<[u8; 20]> {
+    let hex = value.trim().strip_prefix("0x").unwrap_or(value.trim());
+    let bytes = hex::decode(hex)
+        .map_err(|error| SdkError::Other(format!("invalid ethereum address: {error}")))?;
+    let address: [u8; 20] = bytes
+        .try_into()
+        .map_err(|_| SdkError::Other("invalid ethereum address: expected 20 bytes".to_string()))?;
+    Ok(address)
+}
+
+fn parse_eth_private_key(value: &str) -> Result<[u8; 32]> {
+    let hex = value.trim().strip_prefix("0x").unwrap_or(value.trim());
+    let bytes = hex::decode(hex)
+        .map_err(|error| SdkError::Other(format!("invalid ethereum private key: {error}")))?;
+    let key: [u8; 32] = bytes.try_into().map_err(|_| {
+        SdkError::Other("invalid ethereum private key: expected 32 bytes".to_string())
+    })?;
+    Ok(key)
+}
+
+fn sign_eth_personal_message(private_key: &str, message: &[u8]) -> Result<String> {
+    let key = parse_eth_private_key(private_key)?;
+    let signing_key = SigningKey::from_bytes((&key).into())
+        .map_err(|error| SdkError::Other(format!("invalid ethereum private key: {error}")))?;
+    let prefix = format!("\x19Ethereum Signed Message:\n{}", message.len());
+    let mut hasher = Keccak256::new();
+    hasher.update(prefix.as_bytes());
+    hasher.update(message);
+    let digest = hasher.finalize();
+    let (signature, recovery_id) = signing_key
+        .sign_prehash_recoverable(&digest)
+        .map_err(|error| SdkError::Other(format!("failed to sign L1 message: {error}")))?;
+    let mut bytes = [0_u8; 65];
+    bytes[..64].copy_from_slice(&signature.to_bytes());
+    bytes[64] = recovery_id.to_byte() + 27;
+    Ok(format!("0x{}", hex::encode(bytes)))
 }

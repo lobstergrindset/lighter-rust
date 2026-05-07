@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use super::de::{opt_f64_from_string_or_number, opt_i64_from_string_or_number};
+use super::de::{
+    opt_f64_from_string_or_number, opt_i64_from_string_or_number, opt_string_from_string_or_number,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DepositHistory {
@@ -50,6 +52,43 @@ pub struct DepositHistoryItem {
     pub status: Option<String>,
     #[serde(default)]
     pub l1_tx_hash: Option<String>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FastWithdrawInfo {
+    pub code: i64,
+    #[serde(default)]
+    pub message: Option<String>,
+    #[serde(default, deserialize_with = "opt_i64_from_string_or_number")]
+    pub to_account_index: Option<i64>,
+    #[serde(default, deserialize_with = "opt_f64_from_string_or_number")]
+    pub withdraw_limit: Option<f64>,
+    #[serde(default, deserialize_with = "opt_f64_from_string_or_number")]
+    pub max_withdrawal_amount: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransferFeeInfo {
+    pub code: i64,
+    #[serde(default)]
+    pub message: Option<String>,
+    #[serde(default, deserialize_with = "opt_f64_from_string_or_number")]
+    pub transfer_fee_usdc: Option<f64>,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntentAddress {
+    pub code: i64,
+    #[serde(default)]
+    pub message: Option<String>,
+    #[serde(default, deserialize_with = "opt_string_from_string_or_number")]
+    pub intent_address: Option<String>,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }

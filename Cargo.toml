@@ -33,6 +33,9 @@ thiserror = "2"
 libloading = "0.8"
 async-trait = "0.1"
 tracing = "0.1"
+hex = "0.4"
+k256 = { version = "0.13", features = ["ecdsa"] }
+sha3 = "0.10"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util", "macros"] }
