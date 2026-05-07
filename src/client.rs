@@ -138,6 +138,32 @@ impl SignerClient {
         nm.next_nonce().await
     }
 
+    fn manages_nonce(api_key_index: Option<u8>, nonce: Option<i64>) -> bool {
+        api_key_index.is_none() || nonce.is_none()
+    }
+
+    fn is_invalid_nonce_response(resp: &RespSendTx) -> bool {
+        resp.code == CODE_INVALID_NONCE
+            || resp
+                .message
+                .as_deref()
+                .is_some_and(|message| message.contains("invalid nonce"))
+    }
+
+    fn is_invalid_nonce_error(error: &SdkError) -> bool {
+        match error {
+            SdkError::Api { code, .. } if *code == CODE_INVALID_NONCE => true,
+            _ => error.to_string().contains("invalid nonce"),
+        }
+    }
+
+    fn is_invalid_nonce_result(result: &std::result::Result<RespSendTx, SdkError>) -> bool {
+        match result {
+            Ok(resp) => Self::is_invalid_nonce_response(resp),
+            Err(error) => Self::is_invalid_nonce_error(error),
+        }
+    }
+
     async fn handle_tx_result(
         &self,
         result: &std::result::Result<RespSendTx, SdkError>,
@@ -219,57 +245,74 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
-        let manages_nonce = api_key_index.is_none() || nonce.is_none();
-        let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
-        let signed = match signer::sign_create_order_with_attributes(
-            market_index,
-            client_order_index,
-            base_amount,
-            price,
-            is_ask as i32,
-            order_type,
-            time_in_force,
-            reduce_only as i32,
-            trigger_price,
-            order_expiry,
-            n,
-            key as i32,
-            self.account_index,
-            &tx_attributes,
-        ) {
-            Ok(signed) => signed,
-            Err(err) => {
-                if manages_nonce {
-                    let nm = self.nonce_manager.lock().await;
-                    nm.acknowledge_failure(key).await;
-                }
-                return Err(err);
-            }
-        };
-        let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
-        if let Err(error) = &result {
-            warn!(
-                account_index = self.account_index,
-                api_key_index = key,
-                nonce = n,
+        let manages_nonce = Self::manages_nonce(api_key_index, nonce);
+        let mut retry_invalid_nonce = manages_nonce;
+
+        loop {
+            let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
+            let signed = match signer::sign_create_order_with_attributes(
                 market_index,
                 client_order_index,
                 base_amount,
                 price,
-                is_ask,
+                is_ask as i32,
                 order_type,
                 time_in_force,
-                reduce_only,
+                reduce_only as i32,
                 trigger_price,
                 order_expiry,
-                tx_type = signed.tx_type,
-                tx_info_len = signed.tx_info.len(),
-                %error,
-                "lighter create order send failed"
-            );
+                n,
+                key as i32,
+                self.account_index,
+                &tx_attributes,
+            ) {
+                Ok(signed) => signed,
+                Err(err) => {
+                    if manages_nonce {
+                        let nm = self.nonce_manager.lock().await;
+                        nm.acknowledge_failure(key).await;
+                    }
+                    return Err(err);
+                }
+            };
+            let result = self.rest.send_tx(signed.tx_type, &signed.tx_info).await;
+            if let Err(error) = &result {
+                warn!(
+                    account_index = self.account_index,
+                    api_key_index = key,
+                    nonce = n,
+                    market_index,
+                    client_order_index,
+                    base_amount,
+                    price,
+                    is_ask,
+                    order_type,
+                    time_in_force,
+                    reduce_only,
+                    trigger_price,
+                    order_expiry,
+                    tx_type = signed.tx_type,
+                    tx_info_len = signed.tx_info.len(),
+                    %error,
+                    "lighter create order send failed"
+                );
+            }
+            self.handle_tx_result(&result, key).await;
+            if retry_invalid_nonce && Self::is_invalid_nonce_result(&result) {
+                retry_invalid_nonce = false;
+                warn!(
+                    account_index = self.account_index,
+                    api_key_index = key,
+                    nonce = n,
+                    market_index,
+                    client_order_index,
+                    "lighter create order hit invalid nonce; retrying after nonce refresh"
+                );
+                continue;
+            }
+
+            return Ok((signed, result?));
         }
-        self.handle_tx_result(&result, key).await;
-        Ok((signed, result?))
     }
 
     pub async fn create_grouped_orders(
@@ -591,36 +634,65 @@ impl SignerClient {
         api_key_index: Option<u8>,
         nonce: Option<i64>,
     ) -> Result<(signer::SignedTx, RespSendTx)> {
-        let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
+        let manages_nonce = Self::manages_nonce(api_key_index, nonce);
+        let mut retry_invalid_nonce = manages_nonce;
         let memo = fast_withdraw_memo_for_address(to_address)?;
-        let signed = signer::sign_transfer_with_attributes(
-            to_account_index,
-            USDC_ASSET_INDEX as i16,
-            ASSET_ROUTE_TYPE_PERPS,
-            ASSET_ROUTE_TYPE_PERPS,
-            amount,
-            usdc_fee,
-            &memo,
-            n,
-            key as i32,
-            self.account_index,
-            &L2TxAttributes::default(),
-        );
-        let signed = match signed {
-            Ok(signed) => signed,
-            Err(err) => {
-                let nm = self.nonce_manager.lock().await;
-                nm.acknowledge_failure(key).await;
-                return Err(err);
+
+        loop {
+            let (key, n) = self.get_api_key_and_nonce(api_key_index, nonce).await?;
+            let signed = signer::sign_transfer_with_attributes(
+                to_account_index,
+                USDC_ASSET_INDEX as i16,
+                ASSET_ROUTE_TYPE_PERPS,
+                ASSET_ROUTE_TYPE_PERPS,
+                amount,
+                usdc_fee,
+                &memo,
+                n,
+                key as i32,
+                self.account_index,
+                &L2TxAttributes::default(),
+            );
+            let signed = match signed {
+                Ok(signed) => signed,
+                Err(err) => {
+                    if manages_nonce {
+                        let nm = self.nonce_manager.lock().await;
+                        nm.acknowledge_failure(key).await;
+                    }
+                    return Err(err);
+                }
+            };
+            let signed = match add_l1_signature_to_signed_tx(signed, eth_private_key) {
+                Ok(signed) => signed,
+                Err(err) => {
+                    if manages_nonce {
+                        let nm = self.nonce_manager.lock().await;
+                        nm.acknowledge_failure(key).await;
+                    }
+                    return Err(err);
+                }
+            };
+            let result = self
+                .rest
+                .fast_withdraw(&signed.tx_info, to_address, auth)
+                .await;
+            self.handle_tx_result(&result, key).await;
+            if retry_invalid_nonce && Self::is_invalid_nonce_result(&result) {
+                retry_invalid_nonce = false;
+                warn!(
+                    account_index = self.account_index,
+                    api_key_index = key,
+                    nonce = n,
+                    to_account_index,
+                    to_address,
+                    "lighter fast withdraw hit invalid nonce; retrying after nonce refresh"
+                );
+                continue;
             }
-        };
-        let signed = add_l1_signature_to_signed_tx(signed, eth_private_key)?;
-        let result = self
-            .rest
-            .fast_withdraw(&signed.tx_info, to_address, auth)
-            .await;
-        self.handle_tx_result(&result, key).await;
-        Ok((signed, result?))
+
+            return Ok((signed, result?));
+        }
     }
 
     pub async fn change_pub_key(
@@ -1195,4 +1267,55 @@ fn sign_eth_personal_message(private_key: &str, message: &[u8]) -> Result<String
     bytes[..64].copy_from_slice(&signature.to_bytes());
     bytes[64] = recovery_id.to_byte() + 27;
     Ok(format!("0x{}", hex::encode(bytes)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_invalid_nonce_responses() {
+        let code_match = RespSendTx {
+            code: CODE_INVALID_NONCE,
+            message: Some("something else".to_string()),
+            tx_hash: None,
+            predicted_execution_time_ms: None,
+            volume_quota_remaining: None,
+        };
+        let message_match = RespSendTx {
+            code: 400,
+            message: Some("invalid nonce".to_string()),
+            tx_hash: None,
+            predicted_execution_time_ms: None,
+            volume_quota_remaining: None,
+        };
+        let ok = RespSendTx {
+            code: CODE_OK,
+            message: None,
+            tx_hash: None,
+            predicted_execution_time_ms: None,
+            volume_quota_remaining: None,
+        };
+
+        assert!(SignerClient::is_invalid_nonce_response(&code_match));
+        assert!(SignerClient::is_invalid_nonce_response(&message_match));
+        assert!(!SignerClient::is_invalid_nonce_response(&ok));
+    }
+
+    #[test]
+    fn detects_invalid_nonce_errors() {
+        let code_match = SdkError::Api {
+            code: CODE_INVALID_NONCE,
+            message: "bad request".to_string(),
+        };
+        let message_match = SdkError::Other("invalid nonce".to_string());
+        let other = SdkError::Api {
+            code: 400,
+            message: "bad request".to_string(),
+        };
+
+        assert!(SignerClient::is_invalid_nonce_error(&code_match));
+        assert!(SignerClient::is_invalid_nonce_error(&message_match));
+        assert!(!SignerClient::is_invalid_nonce_error(&other));
+    }
 }
