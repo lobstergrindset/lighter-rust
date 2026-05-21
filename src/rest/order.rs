@@ -19,6 +19,11 @@ impl LighterRestClient {
         .await
     }
 
+    pub async fn get_perp_order_book_details(&self) -> Result<OrderBookDetails> {
+        self.get_with_query("/api/v1/orderBookDetails", &[("filter", "perp")])
+            .await
+    }
+
     pub async fn get_order_book_orders(
         &self,
         market_id: i64,
