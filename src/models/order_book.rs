@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use super::de::{opt_f64_from_string_or_number, opt_i64_from_string_or_number};
+use super::de::{
+    opt_f64_from_string_or_number, opt_i64_from_string_or_number, vec_from_null_or_default,
+};
 use super::order::SimpleOrder;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,9 +84,9 @@ pub struct OrderBookDetails {
     pub code: i64,
     #[serde(default)]
     pub message: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "vec_from_null_or_default")]
     pub order_book_details: Vec<PerpsOrderBookDetail>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "vec_from_null_or_default")]
     pub spot_order_book_details: Vec<SpotOrderBookDetail>,
 }
 
@@ -212,4 +214,51 @@ pub struct SpotOrderBookDetail {
     pub daily_chart: Option<serde_json::Map<String, serde_json::Value>>,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn order_book_details_accepts_null_spot_details_for_perp_filter() {
+        let raw = r#"{
+            "code": 200,
+            "order_book_details": [
+                {
+                    "symbol": "ETH",
+                    "market_id": 0,
+                    "price_decimals": 2,
+                    "size_decimals": 4
+                }
+            ],
+            "spot_order_book_details": null
+        }"#;
+
+        let parsed: OrderBookDetails = serde_json::from_str(raw).expect("order book details");
+
+        assert_eq!(parsed.order_book_details.len(), 1);
+        assert!(parsed.spot_order_book_details.is_empty());
+    }
+
+    #[test]
+    fn order_book_details_accepts_null_perp_details_for_spot_filter() {
+        let raw = r#"{
+            "code": 200,
+            "order_book_details": null,
+            "spot_order_book_details": [
+                {
+                    "symbol": "USDC",
+                    "market_id": 1000,
+                    "price_decimals": 4,
+                    "size_decimals": 2
+                }
+            ]
+        }"#;
+
+        let parsed: OrderBookDetails = serde_json::from_str(raw).expect("order book details");
+
+        assert!(parsed.order_book_details.is_empty());
+        assert_eq!(parsed.spot_order_book_details.len(), 1);
+    }
 }

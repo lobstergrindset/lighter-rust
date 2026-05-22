@@ -1,5 +1,14 @@
 use serde::{Deserialize, Deserializer, de};
 
+/// Deserialize a Vec field that may be omitted or returned as JSON null.
+pub fn vec_from_null_or_default<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(Option::<Vec<T>>::deserialize(deserializer)?.unwrap_or_default())
+}
+
 /// Deserialize an optional i64 from either JSON number or numeric string.
 pub fn opt_i64_from_string_or_number<'de, D>(de: D) -> Result<Option<i64>, D::Error>
 where
