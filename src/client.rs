@@ -26,6 +26,13 @@ use crate::types::transact_opts::L2TxAttributes;
 const CODE_OK: i64 = 200;
 const CODE_INVALID_NONCE: i64 = 21104;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BatchNonceAction {
+    None,
+    Refresh,
+    Rollback,
+}
+
 pub struct SignerClient {
     pub config: Config,
     pub account_index: i64,
@@ -150,6 +157,14 @@ impl SignerClient {
                 .is_some_and(|message| message.contains("invalid nonce"))
     }
 
+    fn is_invalid_nonce_batch_response(resp: &RespSendTxBatch) -> bool {
+        resp.code == CODE_INVALID_NONCE
+            || resp
+                .message
+                .as_deref()
+                .is_some_and(|message| message.contains("invalid nonce"))
+    }
+
     fn is_invalid_nonce_error(error: &SdkError) -> bool {
         match error {
             SdkError::Api { code, .. } if *code == CODE_INVALID_NONCE => true,
@@ -161,6 +176,18 @@ impl SignerClient {
         match result {
             Ok(resp) => Self::is_invalid_nonce_response(resp),
             Err(error) => Self::is_invalid_nonce_error(error),
+        }
+    }
+
+    fn batch_nonce_action(
+        result: &std::result::Result<RespSendTxBatch, SdkError>,
+    ) -> BatchNonceAction {
+        match result {
+            Ok(resp) if Self::is_invalid_nonce_batch_response(resp) => BatchNonceAction::Refresh,
+            Ok(resp) if resp.code != CODE_OK => BatchNonceAction::Rollback,
+            Err(error) if Self::is_invalid_nonce_error(error) => BatchNonceAction::Refresh,
+            Err(_) => BatchNonceAction::Rollback,
+            _ => BatchNonceAction::None,
         }
     }
 
@@ -1180,20 +1207,16 @@ impl SignerClient {
         let infos_json = serde_json::to_string(&tx_infos)?;
         let result = self.rest.send_tx_batch(&types_json, &infos_json).await;
 
-        match &result {
-            Ok(resp) if resp.code == CODE_INVALID_NONCE => {
+        match Self::batch_nonce_action(&result) {
+            BatchNonceAction::Refresh => {
                 let nm = self.nonce_manager.lock().await;
                 let _ = nm.hard_refresh_nonce(api_key_index).await;
             }
-            Ok(resp) if resp.code != CODE_OK => {
+            BatchNonceAction::Rollback => {
                 self.acknowledge_batch_failure(api_key_index, signed_txs.len())
                     .await;
             }
-            Err(_) => {
-                self.acknowledge_batch_failure(api_key_index, signed_txs.len())
-                    .await;
-            }
-            _ => {}
+            BatchNonceAction::None => {}
         }
 
         result
@@ -1303,6 +1326,37 @@ mod tests {
     }
 
     #[test]
+    fn detects_invalid_nonce_batch_responses() {
+        let code_match = RespSendTxBatch {
+            code: CODE_INVALID_NONCE,
+            message: Some("something else".to_string()),
+            tx_hash: None,
+            predicted_execution_time_ms: None,
+            volume_quota_remaining: None,
+        };
+        let message_match = RespSendTxBatch {
+            code: 400,
+            message: Some("invalid nonce".to_string()),
+            tx_hash: None,
+            predicted_execution_time_ms: None,
+            volume_quota_remaining: None,
+        };
+        let ok = RespSendTxBatch {
+            code: CODE_OK,
+            message: None,
+            tx_hash: None,
+            predicted_execution_time_ms: None,
+            volume_quota_remaining: None,
+        };
+
+        assert!(SignerClient::is_invalid_nonce_batch_response(&code_match));
+        assert!(SignerClient::is_invalid_nonce_batch_response(
+            &message_match
+        ));
+        assert!(!SignerClient::is_invalid_nonce_batch_response(&ok));
+    }
+
+    #[test]
     fn detects_invalid_nonce_errors() {
         let code_match = SdkError::Api {
             code: CODE_INVALID_NONCE,
@@ -1317,5 +1371,18 @@ mod tests {
         assert!(SignerClient::is_invalid_nonce_error(&code_match));
         assert!(SignerClient::is_invalid_nonce_error(&message_match));
         assert!(!SignerClient::is_invalid_nonce_error(&other));
+    }
+
+    #[test]
+    fn batch_api_invalid_nonce_refreshes_instead_of_rolling_back() {
+        let result = Err(SdkError::Api {
+            code: CODE_INVALID_NONCE,
+            message: "invalid nonce".to_string(),
+        });
+
+        assert_eq!(
+            SignerClient::batch_nonce_action(&result),
+            BatchNonceAction::Refresh
+        );
     }
 }
